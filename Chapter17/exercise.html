@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kiểm tra Mật khẩu Real-time</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 400px;
+        }
+
+        h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box; /* Để padding không làm vỡ layout */
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            border-color: #007bff;
+            outline: none;
+        }
+
+        /* Khu vực ví dụ */
+        .example {
+            font-size: 0.9em;
+            color: #666;
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        /* Danh sách điều kiện */
+        .requirements {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            font-size: 0.95em;
+        }
+
+        .requirements li {
+            margin-bottom: 8px;
+            padding-left: 25px;
+            position: relative;
+            transition: color 0.3s;
+        }
+
+        /* Icon trạng thái trước dòng */
+        .requirements li::before {
+            content: '✖'; /* Dấu x */
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        /* Trạng thái chưa đạt (mặc định) */
+        .invalid {
+            color: #dc3545; /* Đỏ */
+        }
+
+        /* Trạng thái đã đạt */
+        .valid {
+            color: #28a745; /* Xanh lá */
+        }
+        .valid::before {
+            content: '✔'; /* Dấu tích */
+        }
+
+        /* Khu vực kết quả độ mạnh */
+        .result-box {
+            margin-top: 20px;
+            padding: 15px;
+            text-align: center;
+            font-weight: bold;
+            border-radius: 5px;
+            display: none; /* Ẩn mặc định */
+        }
+
+        .strength-weak { background-color: #ffcccc; color: #cc0000; }
+        .strength-medium { background-color: #fff3cd; color: #856404; }
+        .strength-strong { background-color: #d4edda; color: #155724; }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>Thiết lập Mật khẩu</h2>
+        
+        <div class="example">
+            <strong>Ví dụ hợp lệ:</strong><br>
+            Test@1234 (Trung bình)<br>
+            SieuBaoMat#2024 (Mạnh)
+        </div>
+
+        <div class="input-group">
+            <label for="passwordInput">Nhập mật khẩu của bạn:</label>
+            <input type="text" id="passwordInput" placeholder="Nhập mật khẩu..." oninput="kiemTraMatKhau()">
+        </div>
+
+        <ul class="requirements">
+            <li id="req-length" class="invalid">Ít nhất 8 ký tự</li>
+            <li id="req-upper" class="invalid">Chữ cái viết hoa (A-Z)</li>
+            <li id="req-lower" class="invalid">Chữ cái viết thường (a-z)</li>
+            <li id="req-number" class="invalid">Chữ số (0-9)</li>
+            <li id="req-special" class="invalid">Ký tự đặc biệt (!, @, #...)</li>
+        </ul>
+
+        <div id="strengthResult" class="result-box"></div>
+    </div>
+
+    <script>
+        function kiemTraMatKhau() {
+            const matKhau = document.getElementById('passwordInput').value;
+            
+            // Định nghĩa các tiêu chí
+            const conditions = {
+                length: matKhau.length >= 8,
+                upper: /[A-Z]/.test(matKhau),
+                lower: /[a-z]/.test(matKhau),
+                number: /[0-9]/.test(matKhau),
+                special: /[!@#$%^&*(),.?":{}|<>_\-+\/=]/.test(matKhau)
+            };
+
+            // Cập nhật giao diện từng dòng (Đỏ/Xanh)
+            updateStatus('req-length', conditions.length);
+            updateStatus('req-upper', conditions.upper);
+            updateStatus('req-lower', conditions.lower);
+            updateStatus('req-number', conditions.number);
+            updateStatus('req-special', conditions.special);
+
+            // Kiểm tra tổng thể xem đã hợp lệ chưa (tất cả phải true)
+            const isValiad = Object.values(conditions).every(Boolean);
+
+            const resultBox = document.getElementById('strengthResult');
+
+            if (isValiad) {
+                resultBox.style.display = 'block';
+                const doDai = matKhau.length;
+                
+                // Reset class cũ
+                resultBox.className = 'result-box';
+
+                // Logic độ mạnh
+                if (doDai >= 12) {
+                    resultBox.textContent = "Mật khẩu hợp lệ! Độ mạnh: MẠNH";
+                    resultBox.classList.add('strength-strong');
+                } else if (doDai > 8) {
+                    resultBox.textContent = "Mật khẩu hợp lệ! Độ mạnh: TRUNG BÌNH";
+                    resultBox.classList.add('strength-medium');
+                } else {
+                    resultBox.textContent = "Mật khẩu hợp lệ! Độ mạnh: YẾU";
+                    resultBox.classList.add('strength-weak');
+                }
+            } else {
+                // Nếu chưa đủ điều kiện thì ẩn hộp kết quả hoặc báo lỗi chung
+                resultBox.style.display = 'none';
+            }
+        }
+
+        // Hàm phụ trợ để đổi class CSS (invalid -> valid)
+        function updateStatus(elementId, isValid) {
+            const element = document.getElementById(elementId);
+            if (isValid) {
+                element.classList.remove('invalid');
+                element.classList.add('valid');
+            } else {
+                element.classList.remove('valid');
+                element.classList.add('invalid');
+            }
+        }
+    </script>
+
+</body>
+</html>

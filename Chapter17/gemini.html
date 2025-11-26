@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phân tích Đánh giá từ Excel</title>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f9; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h1 { color: #333; text-align: center; margin-bottom: 10px; }
+        
+        /* Style cho nút upload */
+        .upload-area {
+            border: 2px dashed #667eea;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 30px;
+            border-radius: 10px;
+            background-color: #f8faff;
+            transition: all 0.3s;
+        }
+        .upload-area:hover { background-color: #eef2ff; }
+        input[type="file"] { font-size: 1.1em; cursor: pointer; }
+
+        /* Style cho phần kết quả */
+        .results-box { display: none; gap: 20px; margin-bottom: 30px; flex-wrap: wrap; } /* Mặc định ẩn cho đến khi upload */
+        .card { flex: 1; padding: 20px; border-radius: 8px; color: white; min-width: 300px; }
+        .card.winner { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .card.longest { background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%); color: #333; }
+        .card h2 { margin-top: 0; font-size: 1.2em; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 10px; }
+        .card.longest h2 { border-bottom: 1px solid rgba(0,0,0,0.1); }
+        .highlight { font-size: 2.5em; font-weight: bold; display: block; margin: 10px 0; }
+        
+        /* Table */
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9em; display: none; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; font-weight: bold; color: #555; }
+        .comment-cell { max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #666; }
+        
+        /* Error message */
+        #error-msg { color: red; text-align: center; display: none; font-weight: bold; margin-top: 10px;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Công Cụ Phân Tích Điểm & Comment</h1>
+    <p style="text-align: center; color: #666; margin-bottom: 20px;">Tải lên file Excel (.xlsx) chứa bảng điểm Cross-review</p>
+
+    <div class="upload-area">
+        <input type="file" id="fileInput" accept=".xlsx, .xls" />
+        <p style="font-size: 0.9em; color: #888; margin-top: 10px;">Hệ thống sẽ tự động đọc các cột: "Nhóm được chấm", "Tổng điểm", "Nhận xét chi tiết"</p>
+    </div>
+    <div id="error-msg"></div>
+
+    <div class="results-box" id="results-area">
+        <div class="card winner">
+            <h2>🏆 Nhóm có điểm TB cao nhất</h2>
+            <span id="highest-group" class="highlight">...</span>
+            <p id="highest-score">Điểm trung bình: ...</p>
+        </div>
+
+        <div class="card longest">
+            <h2>💬 Nhóm có comment dài nhất</h2>
+            <span id="longest-group" class="highlight">...</span>
+            <p>Độ dài: <span id="longest-length">...</span> ký tự</p>
+            <p style="font-style: italic; font-size: 0.9em; background: rgba(255,255,255,0.5); padding: 10px; border-radius: 5px;">
+                "<span id="longest-content">...</span>"
+            </p>
+        </div>
+    </div>
+
+    <table id="data-table">
+        <thead>
+            <tr>
+                <th>STT</th>
+                <th>Nhóm được chấm</th>
+                <th>Tổng điểm</th>
+                <th>Nhận xét (Trích đoạn)</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<script>
+    // Lắng nghe sự kiện khi người dùng chọn file
+    document.getElementById('fileInput').addEventListener('change', handleFile);
+
+    function handleFile(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        
+        reader.onload = function(event) {
+            try {
+                const data = new Uint8Array(event.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+
+                // Lấy sheet đầu tiên trong file excel
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+
+                // Chuyển đổi sheet thành dạng JSON
+                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                if (jsonData.length === 0) {
+                    showError("File Excel không có dữ liệu!");
+                    return;
+                }
+
+                // Xử lý dữ liệu
+                processExcelData(jsonData);
+
+            } catch (error) {
+                console.error(error);
+                showError("Đã xảy ra lỗi khi đọc file. Vui lòng kiểm tra định dạng file.");
+            }
+        };
+
+        reader.readAsArrayBuffer(file);
+    }
+
+    function showError(msg) {
+        const el = document.getElementById('error-msg');
+        el.textContent = msg;
+        el.style.display = 'block';
+    }
+
+    function processExcelData(data) {
+        document.getElementById('error-msg').style.display = 'none';
+        
+        // Chuẩn hóa dữ liệu từ các tên cột có thể có trong file Excel
+        // Lưu ý: Tên cột trong file Excel phải CHÍNH XÁC (hoặc bạn có thể sửa code dưới đây cho khớp)
+        const formattedData = data.map(row => {
+            // Tìm các key tương ứng dù có khoảng trắng hay chữ hoa thường
+            const keys = Object.keys(row);
+            
+            // Helper function tìm key gần đúng
+            const findKey = (keyword) => keys.find(k => k.toLowerCase().includes(keyword.toLowerCase()));
+
+            // Mapping dựa trên hình ảnh bạn cung cấp
+            // Cột C: "Nhóm được chấm"
+            // Cột D: "Tổng điểm"
+            // Cột O: "Nhận xét chi tiết"
+            const groupKey = findKey("Nhóm được chấm") || findKey("Nhóm") || "Nhóm được chấm"; 
+            const scoreKey = findKey("Tổng điểm") || "Tổng điểm";
+            const commentKey = findKey("Nhận xét") || "Nhận xét chi tiết";
+
+            return {
+                target: row[groupKey], // Nhóm được chấm
+                score: parseFloat(row[scoreKey]) || 0, // Tổng điểm
+                comment: row[commentKey] ? String(row[commentKey]) : "" // Comment
+            };
+        }).filter(item => item.target !== undefined); // Lọc bỏ các dòng không có tên nhóm
+
+        // Gọi hàm phân tích và hiển thị
+        analyzeAndRender(formattedData);
+    }
+
+    function analyzeAndRender(data) {
+        const groupScores = {}; 
+        let maxCommentLength = 0;
+        let longestCommentGroup = "N/A";
+        let longestCommentContent = "";
+
+        // Xóa dữ liệu bảng cũ
+        const tableBody = document.querySelector('#data-table tbody');
+        tableBody.innerHTML = '';
+
+        data.forEach((row, index) => {
+            // --- Logic tính điểm trung bình ---
+            if (row.target) {
+                if (!groupScores[row.target]) {
+                    groupScores[row.target] = { total: 0, count: 0 };
+                }
+                groupScores[row.target].total += row.score;
+                groupScores[row.target].count += 1;
+            }
+
+            // --- Logic tìm comment dài nhất ---
+            const commentText = row.comment.trim();
+            if (commentText.length > maxCommentLength) {
+                maxCommentLength = commentText.length;
+                longestCommentGroup = row.target;
+                longestCommentContent = commentText;
+            }
+
+            // --- Render bảng chi tiết ---
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${index + 1}</td>
+                <td>${row.target}</td>
+                <td>${row.score}</td>
+                <td class="comment-cell" title="${row.comment}">${row.comment || ""}</td>
+            `;
+            tableBody.appendChild(tr);
+        });
+
+        // Tìm nhóm có điểm TB cao nhất
+        let maxAvgScore = -1;
+        let bestGroup = "N/A";
+
+        for (const [group, stats] of Object.entries(groupScores)) {
+            const avg = stats.total / stats.count;
+            if (avg > maxAvgScore) {
+                maxAvgScore = avg;
+                bestGroup = group;
+            }
+        }
+
+        // --- Hiển thị UI ---
+        document.getElementById('results-area').style.display = 'flex';
+        document.getElementById('data-table').style.display = 'table';
+
+        document.getElementById('highest-group').textContent = "Nhóm " + bestGroup;
+        document.getElementById('highest-score').textContent = `Điểm trung bình: ${maxAvgScore >= 0 ? maxAvgScore.toFixed(2) : 0}`;
+
+        document.getElementById('longest-group').textContent = "Nhóm " + longestCommentGroup;
+        document.getElementById('longest-length').textContent = maxCommentLength;
+        
+        const displayContent = longestCommentContent.length > 100 
+            ? longestCommentContent.substring(0, 100) + "..." 
+            : longestCommentContent;
+        document.getElementById('longest-content').textContent = displayContent || "(Không có nội dung)";
+    }
+</script>
+
+</body>
+</html>
